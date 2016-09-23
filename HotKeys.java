@@ -1,14 +1,11 @@
 //package hotkey;
 
 import java.awt.event.KeyEvent;
-import java.util.Scanner;
-import java.util.HashSet;
-import java.util.Set;
 
 import com.sun.jna.platform.win32.Kernel32; 
 import com.sun.jna.platform.win32.User32;
 import com.sun.jna.platform.win32.WinDef.HMODULE;
-
+import com.sun.jna.platform.KeyboardUtils;
 import com.sun.jna.platform.win32.WinDef.LRESULT;
 import com.sun.jna.platform.win32.WinDef.WPARAM;
 import com.sun.jna.platform.win32.WinUser;
@@ -23,10 +20,17 @@ public class HotKeys implements Runnable{
 
     private HHOOK hook;
     private HOOKPROC hookproc;
+    private boolean filter = true;
     private boolean quit = false;
-    private boolean hearing = true;
-    private Thread thread;
-    private Set<Integer> keys;
+
+    //http://www.kbdedit.com/manual/low_level_vk_list.html
+    final private int VK_LWIN   = 91;
+    final private int VK_RWIN   = 92;
+    final private int VK_TAB    = 9;
+    final private int LLKHF_ALTDOWN = 0x20;
+    final private int VK_DELETE = 0x2E;
+    final private int VK_ESCAPE = 0x1B;
+	final private int VK_CONTROL = 17;
 
     public static HotKeys getIstance() {
         if (INSTANCE == null) {
@@ -37,7 +41,6 @@ public class HotKeys implements Runnable{
     }
 
     private HotKeys() {
-        keys = new HashSet<Integer>();
 
         hookproc = new LowLevelKeyboardProc() {
  
@@ -45,16 +48,19 @@ public class HotKeys implements Runnable{
 
                 LRESULT result;
                 
-                if (keys.contains(keyInfo.vkCode)) {
-                    System.out.println("vkCode = " + keyInfo.vkCode + " scan_code = " + keyInfo.scanCode);
-                    result = new LRESULT(1);
-                }
-                else {
-                    //System.out.println("nCode =" + nCode + ", wParam =" + wParam + ", vkCode=" + keyInfo.vkCode);
-                    result = new LRESULT(0);
+                if ( (keyInfo.vkCode == VK_LWIN) || (keyInfo.vkCode == VK_RWIN) ||
+                        ( (keyInfo.vkCode == VK_TAB)&&((keyInfo.flags & LLKHF_ALTDOWN) != 0) ) ||
+                        ( (keyInfo.vkCode == VK_ESCAPE) && ((keyInfo.flags & LLKHF_ALTDOWN) != 0)) ||
+                        ( (keyInfo.vkCode == VK_ESCAPE) && KeyboardUtils.isPressed(KeyEvent.VK_CONTROL)) ||
+                        ( (keyInfo.vkCode == VK_ESCAPE) && KeyboardUtils.isPressed(KeyEvent.VK_CONTROL) && KeyboardUtils.isPressed(KeyEvent.VK_SHIFT)) ||
+						( (keyInfo.vkCode == VK_DELETE) && ((keyInfo.flags & LLKHF_ALTDOWN) != 0) && KeyboardUtils.isPressed(KeyEvent.VK_CONTROL)) 
+                    ) 
+                {
+                    System.out.println("C=" + keyInfo.vkCode + " f=" + keyInfo.flags);
+                    return new LRESULT(1);
                 }
 
-                return result;
+                return new LRESULT(0);
             } 
         };
 
@@ -76,11 +82,11 @@ public class HotKeys implements Runnable{
         }
     }
 
-    public void cycle() {
+    public void run() {
         User32.MSG msg = new User32.MSG();
 
         while (!quit) { 
-            if (hearing)
+            if (filter)
                 User32.INSTANCE.PeekMessage(msg, null, 0, 0, 0);
             try {
                 Thread.sleep(100);
@@ -90,45 +96,16 @@ public class HotKeys implements Runnable{
         }
     }
 
-    public void run() {
-
-        try {
-            Thread.sleep(2000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        //stop();
-        setHearing(false);
-        try {
-            Thread.sleep(2000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        //stop();
-    }
-
-    public void addKey(int key) {
-        keys.add(key);
-    }
-
-    public void removeKey(int key) {
-        keys.remove(key);
-    }
-
-    public void start() {
-        quit = false;
-    }
-
-    public void stop() {
+    public void quit() {
         quit = true;
     }
 
-    public void setHearing(boolean h) {
-        hearing = h;
+    public void filter(boolean h) {
+        filter = h;
     }
 
     public void finalize() {
-        quit = true;
+        quit();
         UnHook();
     }
 
@@ -136,17 +113,7 @@ public class HotKeys implements Runnable{
     public static void main(String[] args) {
         HotKeys hotkey = HotKeys.getIstance();
 
-        hotkey.addKey(91); // Win
-        //hotkey.addKey(KeyEvent.VK_A);
-        /* ============ CTRL ================*/
-        //hotkey.addKey(78);  // Ctrl+N
-        //hotkey.addKey(9);   // Ctrl+Tab
-        //hotkey.addKey(27);  // Ctrl+Esc
-        //hotkey.addKey(KeyEvent.VK_DELETE);
-
-        //Thread t = new Thread(hotkey,"WinLock");
-        //t.start();
-        hotkey.cycle();
+        hotkey.run();
         
         hotkey.finalize();
     } 
