@@ -108,13 +108,15 @@ public class HotKeys implements Runnable{
         quit();
         UnHook();
     }
-
  
     public static void main(String[] args) {
         HotKeys hotkey = HotKeys.getIstance();
-
-        hotkey.run();
         
-        hotkey.finalize();
-    } 
+        if ("start".equals(args[0])) {
+            hotkey.run();
+            hotkey.finalize();
+        } else if ("stop".equals(args[0])) {
+            hotkey.quit();
+        }
+    }
 }
